@@ -18,12 +18,12 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     final int TEAL=Color.rgb(0,168,150), NAVY=Color.rgb(11,23,32), PALE=Color.rgb(239,248,247);
-    android.content.SharedPreferences prefs; LinearLayout root, form; ScrollView scroll;
+    android.content.SharedPreferences prefs; LinearLayout root, form; ScrollView scroll; FrameLayout screen;
     ImageView logo; Uri logoUri; String currentType=""; EditText focused; int textColor=Color.DKGRAY; float textSize=16; int fontStyle=Typeface.NORMAL;
     final ArrayList<EditText> descriptions=new ArrayList<>(), quantities=new ArrayList<>(), prices=new ArrayList<>(), amounts=new ArrayList<>();
     EditText subtotalField,discountField,taxField,totalField;
     EditText clientField,phoneField,rucField,contentField,conditionsField;ImageView letterheadPreview;
-    boolean darkMode=false;
+    boolean darkMode=false,documentScreen=false;
     int selectedTemplate=0;
     final String[] TYPES={"Recibo","Factura","Cotización","Membrete","Notas","Tarjeta de presentación"};
     final String[] TEMPLATE_NAMES={"Corporativo","Minimalista","Ejecutivo","Creativo","Elegante","Técnico"};
@@ -35,6 +35,25 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},44);
         showHome();
     }
+    int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    void showScreen(){
+        screen=new FrameLayout(this);screen.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        Button actions=new Button(this);actions.setText("⋮");actions.setTextSize(25);actions.setTextColor(Color.WHITE);actions.setGravity(Gravity.CENTER);actions.setPadding(0,0,0,dp(3));actions.setMinWidth(0);actions.setMinHeight(0);actions.setBackground(box(TEAL,dp(25)));actions.setElevation(dp(8));
+        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(50),dp(50),Gravity.TOP|Gravity.END);fp.setMargins(dp(10),dp(10),dp(12),0);screen.addView(actions,fp);actions.setOnClickListener(v->showActionsMenu(actions));
+        if(Build.VERSION.SDK_INT>=21)screen.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
+        setContentView(screen);
+    }
+    void showActionsMenu(View anchor){
+        PopupMenu menu=new PopupMenu(this,anchor);if(documentScreen)menu.getMenu().add("Limpiar texto");menu.getMenu().add("Ir al inicio");menu.getMenu().add("Cerrar aplicación");
+        menu.setOnMenuItemClickListener(item->{String action=item.getTitle().toString();if(action.startsWith("Limpiar"))confirmClear();else if(action.startsWith("Ir"))showHome();else finishAffinity();return true;});menu.show();
+    }
+    void confirmClear(){
+        new AlertDialog.Builder(this).setTitle("Limpiar texto").setMessage("¿Deseas borrar los campos visibles de este formato?").setNegativeButton("Cancelar",null).setPositiveButton("Borrar",(d,w)->clearVisibleFields()).show();
+    }
+    void clearVisibleFields(){
+        if(root==null)return;clearEdits(root);recalculate();Toast.makeText(this,"Campos limpios",Toast.LENGTH_SHORT).show();
+    }
+    void clearEdits(View view){if(view instanceof EditText){EditText e=(EditText)view;if(e.isEnabled())e.setText("");return;}if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)clearEdits(g.getChildAt(i));}}
     TextView text(String s,int sp,int color){ TextView v=new TextView(this); v.setText(s); v.setTextSize(sp); v.setTextColor(color); v.setPadding(12,12,12,12); return v; }
     GradientDrawable box(int color,float radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(radius);return g;}
     GradientDrawable bordered(int color,int stroke,float radius){GradientDrawable g=box(color,radius);g.setStroke(2,stroke);return g;}
@@ -43,8 +62,9 @@ public class MainActivity extends Activity {
     void addSpace(int h){ Space s=new Space(this); root.addView(s,new LinearLayout.LayoutParams(1,h)); }
 
     void showHome(){
-        root=base(); scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
-        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);TextView title=text("FORMATOS\nCOMERCIALES",30,Color.WHITE); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); title.setGravity(Gravity.CENTER); title.setBackground(box(NAVY,30)); title.setPadding(20,38,20,38);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button menu=button("⋮");menu.setTextSize(28);top.addView(menu,new LinearLayout.LayoutParams(90,120));root.addView(top);menu.setOnClickListener(v->showThemeMenu(menu));
+        documentScreen=false;
+        root=base(); scroll=new ScrollView(this); scroll.addView(root); showScreen();
+        TextView title=text("FORMATOS\nCOMERCIALES",30,Color.WHITE); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); title.setGravity(Gravity.CENTER); title.setBackground(box(NAVY,30)); title.setPadding(20,38,20,38);root.addView(title);
         TextView sub=text("Tu papelería profesional, lista para crear",16,Color.DKGRAY); sub.setGravity(Gravity.CENTER); root.addView(sub); addSpace(18);
         Button profile=button("⚙  Configurar mi negocio y logo"); root.addView(profile); profile.setOnClickListener(v->showProfile()); addSpace(20);
         String[] icons={"▣  ","▤  ","◇  ","▱  ","✎  ","▰  "};int ix=0;
@@ -55,7 +75,8 @@ public class MainActivity extends Activity {
     void showThemeMenu(View anchor){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Modo normal");m.getMenu().add("Modo oscuro");m.setOnMenuItemClickListener(item->{darkMode=item.getTitle().toString().contains("oscuro");prefs.edit().putBoolean("dark_mode",darkMode).apply();showHome();return true;});m.show();}
 
     void showTemplates(String type){
-        root=base();scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);Button back=button("‹ Volver");root.addView(back);back.setOnClickListener(v->showHome());
+        documentScreen=false;
+        root=base();scroll=new ScrollView(this);scroll.addView(root);showScreen();Button back=button("‹ Volver");root.addView(back);back.setOnClickListener(v->showHome());
         TextView h=text("Elige un diseño",28,NAVY);h.setTypeface(Typeface.DEFAULT,Typeface.BOLD);root.addView(h);root.addView(text("Vista previa de "+type+" · podrás cambiarla después",15,Color.DKGRAY));
         for(int i=0;i<TEMPLATE_NAMES.length;i++){final int pick=i;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.HORIZONTAL);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(16,16,16,16);card.setBackground(bordered(Color.WHITE,Color.rgb(210,222,228),24));TemplatePreview preview=new TemplatePreview(this,i,type);card.addView(preview,new LinearLayout.LayoutParams(190,250));LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);TextView name=text(TEMPLATE_NAMES[i],20,NAVY);name.setTypeface(Typeface.DEFAULT,Typeface.BOLD);words.addView(name);words.addView(text("Diseño profesional listo para personalizar",13,Color.GRAY));Button use=button("Usar este diseño");words.addView(use);card.addView(words,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.setMargins(0,10,0,10);root.addView(card,cp);View.OnClickListener choose=v->{selectedTemplate=pick;prefs.edit().putInt("template_"+type,pick).apply();openDocument(type);};card.setOnClickListener(choose);use.setOnClickListener(choose);}
     }
@@ -66,7 +87,8 @@ public class MainActivity extends Activity {
     }
 
     void showProfile(){
-        root=base(); scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
+        documentScreen=false;
+        root=base(); scroll=new ScrollView(this); scroll.addView(root); showScreen();
         Button back=button("‹ Volver"); root.addView(back); back.setOnClickListener(v->showHome());
         TextView h=text("Identidad del negocio",26,NAVY); h.setTypeface(Typeface.DEFAULT,Typeface.BOLD); root.addView(h);
         TextView logoHelp=text("LOGO DEL NEGOCIO\nToca aquí para cargar PNG o JPG",15,Color.GRAY);logoHelp.setGravity(Gravity.CENTER);GradientDrawable upload=bordered(Color.WHITE,TEAL,24);upload.setStroke(3,TEAL,12,8);logoHelp.setBackground(upload);root.addView(logoHelp,new LinearLayout.LayoutParams(-1,120));
@@ -87,8 +109,9 @@ public class MainActivity extends Activity {
     }
 
     void openDocument(String type){
-        currentType=type;descriptions.clear();quantities.clear();prices.clear();amounts.clear();subtotalField=discountField=taxField=totalField=null;clientField=phoneField=rucField=contentField=conditionsField=null; root=base(); scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll);
-        LinearLayout nav=new LinearLayout(this); Button back=button("‹ Inicio"); nav.addView(back,new LinearLayout.LayoutParams(0,-2,1)); Button profile=button("Negocio"); nav.addView(profile,new LinearLayout.LayoutParams(0,-2,1)); root.addView(nav); back.setOnClickListener(v->showHome());profile.setOnClickListener(v->showProfile());
+        documentScreen=true;
+        currentType=type;descriptions.clear();quantities.clear();prices.clear();amounts.clear();subtotalField=discountField=taxField=totalField=null;clientField=phoneField=rucField=contentField=conditionsField=null; root=base(); scroll=new ScrollView(this); scroll.addView(root); showScreen();
+        Button profile=button("Configurar negocio");LinearLayout.LayoutParams profileParams=new LinearLayout.LayoutParams(-1,-2);profileParams.setMargins(0,0,dp(62),dp(8));root.addView(profile,profileParams);profile.setOnClickListener(v->showProfile());
         addBusinessHeader();
         TextView h=text(type.toUpperCase(Locale.getDefault()),24,NAVY); h.setTypeface(Typeface.DEFAULT,Typeface.BOLD); root.addView(h);
         String date=new SimpleDateFormat("dd/MM/yyyy",Locale.getDefault()).format(new Date());String hour=new SimpleDateFormat("hh:mm a",Locale.getDefault()).format(new Date()); int n=prefs.getInt("seq_"+type,1);
