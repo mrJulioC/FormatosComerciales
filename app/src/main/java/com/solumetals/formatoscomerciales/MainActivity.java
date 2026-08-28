@@ -12,6 +12,9 @@ import android.text.InputType;
 import android.view.*;
 import android.widget.*;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -30,7 +33,7 @@ public class MainActivity extends Activity {
     final int[] TEMPLATE_COLORS={Color.rgb(19,51,75),Color.rgb(0,150,136),Color.rgb(34,42,57),Color.rgb(232,72,111),Color.rgb(119,92,153),Color.rgb(30,119,180)};
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b); prefs=getSharedPreferences("formatos",MODE_PRIVATE);darkMode=prefs.getBoolean("dark_mode",false);
+        super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),false);prefs=getSharedPreferences("formatos",MODE_PRIVATE);darkMode=prefs.getBoolean("dark_mode",false);
         if(Build.VERSION.SDK_INT<29 && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)!=getPackageManager().PERMISSION_GRANTED)
             requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},44);
         showHome();
@@ -38,14 +41,15 @@ public class MainActivity extends Activity {
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     void showScreen(){
         screen=new FrameLayout(this);screen.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
-        Button actions=new Button(this);actions.setText("⋮");actions.setTextSize(25);actions.setTextColor(Color.WHITE);actions.setGravity(Gravity.CENTER);actions.setPadding(0,0,0,dp(3));actions.setMinWidth(0);actions.setMinHeight(0);actions.setBackground(box(TEAL,dp(25)));actions.setElevation(dp(8));
-        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(50),dp(50),Gravity.TOP|Gravity.END);fp.setMargins(dp(10),dp(10),dp(12),0);screen.addView(actions,fp);actions.setOnClickListener(v->showActionsMenu(actions));
-        if(Build.VERSION.SDK_INT>=21)screen.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
+        if(documentScreen){Button actions=new Button(this);actions.setText("⋮");actions.setTextSize(25);actions.setTextColor(Color.WHITE);actions.setGravity(Gravity.CENTER);actions.setPadding(0,0,0,dp(3));actions.setMinWidth(0);actions.setMinHeight(0);actions.setBackground(box(Color.rgb(255,109,0),dp(24)));actions.setElevation(dp(8));
+        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM|Gravity.END);fp.setMargins(0,0,dp(16),dp(16));screen.addView(actions,fp);actions.setOnClickListener(v->showActionsMenu(actions));}
+        ViewCompat.setOnApplyWindowInsetsListener(screen,(v,insets)->{androidx.core.graphics.Insets safe=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());v.setPadding(safe.left,safe.top+dp(12),safe.right,safe.bottom+dp(6));return insets;});
+        ViewCompat.requestApplyInsets(screen);
         setContentView(screen);
     }
     void showActionsMenu(View anchor){
-        PopupMenu menu=new PopupMenu(this,anchor);if(documentScreen)menu.getMenu().add("Limpiar texto");menu.getMenu().add("Ir al inicio");menu.getMenu().add("Cerrar aplicación");
-        menu.setOnMenuItemClickListener(item->{String action=item.getTitle().toString();if(action.startsWith("Limpiar"))confirmClear();else if(action.startsWith("Ir"))showHome();else finishAffinity();return true;});menu.show();
+        PopupMenu menu=new PopupMenu(this,anchor);menu.getMenu().add("Limpiar");menu.getMenu().add("Inicio");menu.getMenu().add("Salir");
+        menu.setOnMenuItemClickListener(item->{String action=item.getTitle().toString();if(action.equals("Limpiar"))confirmClear();else if(action.equals("Inicio"))showHome();else finishAffinity();return true;});menu.show();
     }
     void confirmClear(){
         new AlertDialog.Builder(this).setTitle("Limpiar texto").setMessage("¿Deseas borrar los campos visibles de este formato?").setNegativeButton("Cancelar",null).setPositiveButton("Borrar",(d,w)->clearVisibleFields()).show();
@@ -64,7 +68,9 @@ public class MainActivity extends Activity {
     void showHome(){
         documentScreen=false;
         root=base(); scroll=new ScrollView(this); scroll.addView(root); showScreen();
-        TextView title=text("FORMATOS\nCOMERCIALES",30,Color.WHITE); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); title.setGravity(Gravity.CENTER); title.setBackground(box(NAVY,30)); title.setPadding(20,38,20,38);root.addView(title);
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(16),dp(14),dp(16),dp(14));header.setBackground(box(NAVY,30));
+        ImageView appLogo=new ImageView(this);appLogo.setImageResource(com.solumetals.formatoscomerciales.R.drawable.app_icon);appLogo.setScaleType(ImageView.ScaleType.CENTER_CROP);header.addView(appLogo,new LinearLayout.LayoutParams(dp(76),dp(76)));
+        TextView title=text("FORMATOS\nCOMERCIALES",26,Color.WHITE);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.setGravity(Gravity.CENTER);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));root.addView(header);
         TextView sub=text("Tu papelería profesional, lista para crear",16,Color.DKGRAY); sub.setGravity(Gravity.CENTER); root.addView(sub); addSpace(18);
         Button profile=button("⚙  Configurar mi negocio y logo"); root.addView(profile); profile.setOnClickListener(v->showProfile()); addSpace(20);
         String[] icons={"▣  ","▤  ","◇  ","▱  ","✎  ","▰  "};int ix=0;
@@ -111,7 +117,6 @@ public class MainActivity extends Activity {
     void openDocument(String type){
         documentScreen=true;
         currentType=type;descriptions.clear();quantities.clear();prices.clear();amounts.clear();subtotalField=discountField=taxField=totalField=null;clientField=phoneField=rucField=contentField=conditionsField=null; root=base(); scroll=new ScrollView(this); scroll.addView(root); showScreen();
-        Button profile=button("Configurar negocio");LinearLayout.LayoutParams profileParams=new LinearLayout.LayoutParams(-1,-2);profileParams.setMargins(0,0,dp(62),dp(8));root.addView(profile,profileParams);profile.setOnClickListener(v->showProfile());
         addBusinessHeader();
         TextView h=text(type.toUpperCase(Locale.getDefault()),24,NAVY); h.setTypeface(Typeface.DEFAULT,Typeface.BOLD); root.addView(h);
         String date=new SimpleDateFormat("dd/MM/yyyy",Locale.getDefault()).format(new Date());String hour=new SimpleDateFormat("hh:mm a",Locale.getDefault()).format(new Date()); int n=prefs.getInt("seq_"+type,1);
