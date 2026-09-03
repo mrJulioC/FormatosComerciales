@@ -40,10 +40,10 @@ public class MainActivity extends Activity {
     }
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     void showScreen(){
-        screen=new FrameLayout(this);screen.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        screen=new FrameLayout(this);scroll.setFillViewport(true);screen.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
         if(documentScreen){Button actions=new Button(this);actions.setText("⋮");actions.setTextSize(25);actions.setTextColor(Color.WHITE);actions.setGravity(Gravity.CENTER);actions.setPadding(0,0,0,dp(3));actions.setMinWidth(0);actions.setMinHeight(0);actions.setBackground(box(Color.rgb(255,109,0),dp(24)));actions.setElevation(dp(8));
         FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM|Gravity.END);fp.setMargins(0,0,dp(16),dp(16));screen.addView(actions,fp);actions.setOnClickListener(v->showActionsMenu(actions));}
-        ViewCompat.setOnApplyWindowInsetsListener(screen,(v,insets)->{androidx.core.graphics.Insets safe=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());v.setPadding(safe.left,safe.top+dp(12),safe.right,safe.bottom+dp(6));return insets;});
+        ViewCompat.setOnApplyWindowInsetsListener(screen,(v,insets)->{androidx.core.graphics.Insets safe=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());androidx.core.graphics.Insets keyboard=insets.getInsets(WindowInsetsCompat.Type.ime());int bottom=Math.max(safe.bottom,keyboard.bottom);v.setPadding(safe.left,safe.top+dp(12),safe.right,bottom+dp(6));if(keyboard.bottom>0&&focused!=null)revealField(focused);return insets;});
         ViewCompat.requestApplyInsets(screen);
         setContentView(screen);
     }
@@ -108,11 +108,13 @@ public class MainActivity extends Activity {
 
     EditText field(String hint,String value,String key,boolean multiline){
         EditText e=new EditText(this); e.setHint(hint); e.setText(value); e.setTextSize(textSize); e.setTextColor(textColor); e.setBackground(bordered(Color.WHITE,Color.rgb(165,183,190),18)); e.setPadding(20,16,20,16); e.setSingleLine(!multiline); if(multiline){e.setMinLines(4);e.setGravity(Gravity.TOP);e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);}
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2); p.setMargins(0,7,0,7); e.setLayoutParams(p); e.setOnFocusChangeListener((v,has)->{if(has){focused=e;if(scroll!=null)scroll.postDelayed(()->{Rect area=new Rect(0,0,e.getWidth(),e.getHeight()+dp(180));scroll.requestChildRectangleOnScreen(e,area,true);},180);}});
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2); p.setMargins(0,7,0,7); e.setLayoutParams(p); e.setOnFocusChangeListener((v,has)->{if(has){focused=e;revealField(e);}});
         if(key!=null) e.setOnEditorActionListener((v,a,event)->{ prefs.edit().putString(key,e.getText().toString()).apply(); return false;});
         if(key!=null) e.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){} public void onTextChanged(CharSequence s,int a,int b,int c){prefs.edit().putString(key,s.toString()).apply();}public void afterTextChanged(android.text.Editable x){}});
         return e;
     }
+
+    void revealField(EditText e){if(scroll==null||screen==null||e==null)return;scroll.postDelayed(()->{int[] pos=new int[2];e.getLocationOnScreen(pos);int visibleBottom=screen.getHeight()-screen.getPaddingBottom()-dp(24);int fieldBottom=pos[1]+e.getHeight();if(fieldBottom>visibleBottom)scroll.smoothScrollBy(0,fieldBottom-visibleBottom+dp(32));else{Rect area=new Rect(0,0,e.getWidth(),e.getHeight()+dp(80));scroll.requestChildRectangleOnScreen(e,area,true);}},260);}
 
     void openDocument(String type){
         documentScreen=true;
@@ -179,7 +181,7 @@ public class MainActivity extends Activity {
             p.setColor(Color.rgb(232,243,248));c.drawRoundRect(28,y,W-28,y+46,10,10,p);p.setColor(NAVY);p.setTypeface(Typeface.DEFAULT_BOLD);p.setTextSize(currentType.equals("Recibo")?13:16);c.drawText(currentType.toUpperCase(Locale.getDefault())+(currentType.equals("Recibo")?" NÚMERO":""),42,y+29,p);p.setColor(Color.RED);p.setTextSize(16);c.drawText(String.format(Locale.getDefault(),"%05d",n),W-105,y+29,p);y+=72;p.setColor(Color.DKGRAY);p.setTypeface(Typeface.DEFAULT);p.setTextSize(9);c.drawText("FECHA  "+date,36,y,p);if(currentType.equals("Recibo"))c.drawText("HORA  "+hour,W-145,y,p);y+=30;
             if(currentType.equals("Factura")||currentType.equals("Cotización")){y=drawInvoice(c,p,y,W);}else if(currentType.equals("Recibo")){y=drawReceipt(c,p,y,W);}else{for(int i=0;i<form.getChildCount();i++){View child=form.getChildAt(i);if(!(child instanceof EditText))continue;EditText e=(EditText)child;String label=e.getHint()==null?"":e.getHint().toString();String val=e.getText().toString();p.setTypeface(Typeface.DEFAULT_BOLD);p.setColor(NAVY);p.setTextSize(9);c.drawText(label,30,y,p);y+=13;p.setTypeface(Typeface.DEFAULT);p.setColor(Color.DKGRAY);p.setTextSize(11);y=drawWrapped(c,p,val,30,y,W-60);p.setColor(Color.LTGRAY);c.drawLine(30,y+2,W-30,y+2,p);y+=18;if(y>H-55)break;}}
         }
-        if(!card&&!currentType.equals("Membrete")){p.setColor(Color.GRAY);p.setTextSize(7);c.drawText("Formatos Comerciales",30,H-12,p);}doc.finishPage(page);int n=prefs.getInt("seq_"+currentType,1);
+        doc.finishPage(page);int n=prefs.getInt("seq_"+currentType,1);
         String filename=currentType.replace(" ","-")+"-"+String.format(Locale.getDefault(),"%05d",n)+".pdf";try{Uri out=savePdf(doc,filename);prefs.edit().putInt("seq_"+currentType,n+1).apply();Toast.makeText(this,"Guardado en Descargas/FORMATOS COMERCIALES",Toast.LENGTH_LONG).show();if(share&&out!=null){Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,out);i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Compartir PDF"));}}catch(Exception e){Toast.makeText(this,"No se pudo crear: "+e.getMessage(),Toast.LENGTH_LONG).show();}finally{doc.close();}
     }
     int drawPdfBusinessHeader(Canvas c,Paint p,int y,int W,boolean compact){Bitmap bm=getLogo();if(bm!=null){float sc=Math.min((compact?70f:95f)/bm.getWidth(),(compact?48f:62f)/bm.getHeight());c.drawBitmap(bm,null,new RectF(30,y,30+bm.getWidth()*sc,y+bm.getHeight()*sc),p);}float x=compact?110:150;p.setColor(NAVY);p.setTypeface(Typeface.DEFAULT_BOLD);p.setTextSize(compact?15:19);c.drawText(safe(prefs.getString("business","Mi negocio")),x,y+20,p);p.setTypeface(Typeface.DEFAULT);p.setTextSize(compact?8:10);String owner=safe(prefs.getString("owner","")),phone=safe(prefs.getString("phone",""));c.drawText(owner+(owner.isEmpty()||phone.isEmpty()?"":" · ")+(phone.isEmpty()?"":"Cel. "+phone),x,y+38,p);c.drawText(safe(prefs.getString("address","")),x,y+53,p);return y+(compact?72:86);}
