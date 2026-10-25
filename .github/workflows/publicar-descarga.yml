@@ -1,0 +1,31 @@
+name: Publicar descarga APK
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publicar-descarga.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Formatos-Comerciales-v2.5.2
+          run-id: 33701370834
+          github-token: ${{ github.token }}
+          path: apk
+      - name: Publicar APK existente
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          test -f apk/app-debug.apk
+          mv apk/app-debug.apk apk/Formatos-Comerciales-v2.5.2.apk
+          if ! gh release view v2.5.2 >/dev/null 2>&1; then
+            gh release create v2.5.2 --target 082df01d54c712283f1955baa68661705ca28967 --title "Formatos Comerciales v2.5.2" --notes "Descarga del APK para Android. Corresponde a la compilación existente del 3 de septiembre de 2026."
+          fi
+          gh release upload v2.5.2 apk/Formatos-Comerciales-v2.5.2.apk
